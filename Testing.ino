@@ -24,6 +24,11 @@
 const int HX711_dout = 6; //mcu > HX711 dout pin
 const int HX711_sck = 7; //mcu > HX711 sck pin
 
+constexpr float slowCoef = 0.04;
+constexpr float fastCoef = 0.3;
+constexpr float inCoef = 1.5;
+constexpr float outCoef = 1;
+
 //HX711 constructor:
 HX711_ADC LoadCell(HX711_dout, HX711_sck);
 
@@ -31,75 +36,28 @@ unsigned long t = 0;
 
 void setup() {
   Serial.begin(115200); delay(10);
-  //.println();
   Serial.println("Starting...");
-
-  float calibrationValue = 1; // calibration value
-  // calibrationValue = 696.0; // uncomment this if you want to set this value in the sketch
 
   LoadCell.begin();
 //  LoadCell.setReverseOutput();
-  unsigned long stabilizingtime = 2000; // tare preciscion can be improved by adding a few seconds of stabilizing time
-  boolean _tare = true; //set this to false if you don't want tare to be performed in the next step
-  LoadCell.start(stabilizingtime, _tare);
+  LoadCell.start(2000, true);
+
  if (LoadCell.getTareTimeoutFlag()) 
  {
    Serial.println("ERROR, Timeout");
  }
  else 
  {
+   constexpr float calibrationValue = 1; // calibration value
    LoadCell.setCalFactor(calibrationValue); // set calibration factor (float)
    while (!LoadCell.update());
    Serial.println("Startup is complete");
  }
 }
 
-void loop() 
+void calibrateLoadCells()
 {
-  static boolean newDataReady = 0;
-  const int serialPrintInterval = 5; //increase value to slow down serial print activity
-  static bool detected = false;
-  static float slowFilter = 0;
-  static float fastFilter = 0;
-  const float slowCoef = 0.04;
-  const float fastCoef = 0.3;
-  static float prevEmpty = 0;
-  const float noiseLevel = 450;
-  const float inCoef = 1.5;
-  const float outCoef = 1;
-
-  // check for new data/start next conversion:
-  if (LoadCell.update()) newDataReady = true;
-
-  // get smoothed value from the dataset:
-  if (newDataReady) 
-  {
-    if (millis() > t + serialPrintInterval) 
-    {
-      float sample = LoadCell.getData();
-      fastFilter = fastFilter*(1-fastCoef) + sample*fastCoef;
-//      slowFilter = slowFilter*(1-slowCoef) + sample*slowCoef;
-      float inThreshold = (abs(slowFilter) + abs(noiseLevel))*inCoef;
-      float outThreshold = (abs(slowFilter) + abs(noiseLevel))*outCoef;
-      if (fastFilter > inThreshold)
-        detected = true;
-      if (fastFilter < outThreshold)
-      {
-        slowFilter = slowFilter*(1-slowCoef) + sample*slowCoef;
-//        Serial.println("slow filter");
-        detected = false;
-      }
-
-      if (detected)
-      {
-        Serial.println(fastFilter);
-      }
-      newDataReady = 0;
-      t = millis();
-    }
-  }
-
-  // receive command from serial terminal, send 't' to initiate tare operation:
+    // receive command from serial terminal, send 't' to initiate tare operation:
   if (Serial.available() > 0) 
   {
     char inByte = Serial.read();
@@ -109,7 +67,74 @@ void loop()
   // check if last tare operation is complete:
   if (LoadCell.getTareStatus() == true) 
   {
-    //Serial.println("Tare complete");
+    Serial.println("Tare complete");
+  }
+}
+
+class Sensor
+{
+public:
+  Sensor(const float _inCoef, const float _outCoef, const float _slowCoef, const float _fastCoef): 
+    m_inCoef(_inCoef),
+    m_outCoef(_outCoef),
+    m_slowCoef(_slowCoef),
+    m_fastCoef(_fastCoef),
+    m_slowFilter(0.0),
+    m_fastFilter(0.0),
+    m_noiseLevel(0.0),
+    m_detected(false)
+  {
+    m_noiseLevel = 700.0;
   }
 
+  bool detect(float _sample)
+  {
+    m_fastFilter = m_fastFilter*(1-m_fastCoef) + _sample*m_fastCoef;
+    float inThreshold = (abs(m_slowFilter) + abs(m_noiseLevel*m_inCoef));
+    float outThreshold = (abs(m_slowFilter) + abs(m_noiseLevel*m_outCoef));
+    if (m_fastFilter > inThreshold)
+      m_detected = true;
+    if (m_fastFilter < outThreshold)
+    {
+      m_slowFilter = m_slowFilter*(1-m_slowCoef) + _sample*m_slowCoef;
+      m_detected = false;
+    }
+    return m_detected;
+  }
+
+  const float m_inCoef;
+  const float m_outCoef;
+  const float m_slowCoef;
+  const float m_fastCoef;
+  float m_slowFilter;
+  float m_fastFilter;
+  float m_noiseLevel;
+  bool m_detected;
+};
+
+void loop() 
+{
+  static boolean newDataReady = 0;
+  const int serialPrintInterval = 5; //increase value to slow down serial print activity
+  static Sensor s(inCoef, outCoef, slowCoef, fastCoef);
+
+  // check for new data/start next conversion:
+  if (LoadCell.update()) newDataReady = true;
+
+  if (newDataReady) 
+  {
+    if (millis() > t + serialPrintInterval) 
+    {
+      float sample = LoadCell.getData();
+
+      if (s.detect(sample))
+      {
+        Serial.println(s.m_fastFilter);
+      }
+      newDataReady = 0;
+      t = millis();
+    }
+  }
+
+  calibrateLoadCells();
 }
