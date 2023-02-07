@@ -19,12 +19,15 @@
 */
 
 #include "HX711_ADC.h"
+#include "FastLED.h"
 
 //pins:
 const int HX711_dout = 6; //mcu > HX711 dout pin
 const int HX711_sck = 7; //mcu > HX711 sck pin
+const int LED_PIN = 2;
+const int LED_NUM = 60;
 
-constexpr float slowCoef = 0.04;
+constexpr float slowCoef = 0.02;
 constexpr float fastCoef = 0.3;
 constexpr float inCoef = 1.5;
 constexpr float outCoef = 1;
@@ -32,32 +35,36 @@ constexpr float outCoef = 1;
 //HX711 constructor:
 HX711_ADC LoadCell(HX711_dout, HX711_sck);
 
-unsigned long t = 0;
+CRGB leds[LED_NUM];
+
+
 
 void setup() {
   Serial.begin(115200); delay(10);
   Serial.println("Starting...");
 
+  FastLED.addLeds<WS2852, LED_PIN, GRB>(leds, LED_NUM);
+  FastLED.setBrightness(100);
+
   LoadCell.begin();
 //  LoadCell.setReverseOutput();
   LoadCell.start(2000, true);
 
- if (LoadCell.getTareTimeoutFlag()) 
- {
-   Serial.println("ERROR, Timeout");
- }
- else 
- {
-   constexpr float calibrationValue = 1; // calibration value
-   LoadCell.setCalFactor(calibrationValue); // set calibration factor (float)
-   while (!LoadCell.update());
-   Serial.println("Startup is complete");
- }
+  if (LoadCell.getTareTimeoutFlag()) 
+  {
+    Serial.println("ERROR, Timeout");
+  }
+  else 
+  {
+    LoadCell.setCalFactor(1); // set calibration factor (float)
+    while (!LoadCell.update());
+    Serial.println("Startup is complete");
+  }
 }
 
 void calibrateLoadCells()
 {
-    // receive command from serial terminal, send 't' to initiate tare operation:
+  // receive command from serial terminal, send 't' to initiate tare operation:
   if (Serial.available() > 0) 
   {
     char inByte = Serial.read();
@@ -94,6 +101,22 @@ public:
     float outThreshold = (abs(m_slowFilter) + abs(m_noiseLevel*m_outCoef));
     if (m_fastFilter > inThreshold)
       m_detected = true;
+    if (m_fastFilter < outThreshold + m_noiseLevel)
+    {
+      m_slowFilter = m_slowFilter*(1-m_slowCoef) + _sample*m_slowCoef;
+      m_detected = false;
+    }
+    return m_detected;
+  }
+  
+  bool detectH(float _sample)
+  {
+    const int hysteresisStep = 1000;
+    m_fastFilter = m_fastFilter*(1-m_fastCoef) + _sample*m_fastCoef;
+    float inThreshold = (abs(m_slowFilter + hysteresisStep*m_inCoef) + abs(m_noiseLevel));
+    float outThreshold = (abs(m_slowFilter + hysteresisStep*m_outCoef) + abs(m_noiseLevel));
+    if (m_fastFilter > inThreshold)
+      m_detected = true;
     if (m_fastFilter < outThreshold)
     {
       m_slowFilter = m_slowFilter*(1-m_slowCoef) + _sample*m_slowCoef;
@@ -112,11 +135,22 @@ public:
   bool m_detected;
 };
 
+void setLedColor(int r, int g, int b)
+{
+  for(int k = 0; k < LED_NUM; k++)
+    leds[k] = CRGB(r, g, b); 
+  FastLED.show();
+}
+
 void loop() 
 {
   static boolean newDataReady = 0;
   const int serialPrintInterval = 5; //increase value to slow down serial print activity
-  static Sensor s(inCoef, outCoef, slowCoef, fastCoef);
+  const int tareInterval = 200;
+  static int tareTimer = 0;
+  static unsigned long t = 0;
+//  static Sensor s(inCoef, outCoef, slowCoef, fastCoef);
+  static Sensor s(7, 10, slowCoef, fastCoef);
 
   // check for new data/start next conversion:
   if (LoadCell.update()) newDataReady = true;
@@ -125,13 +159,33 @@ void loop()
   {
     if (millis() > t + serialPrintInterval) 
     {
-      float sample = LoadCell.getData();
+      float sample = abs(LoadCell.getData());
 
-      if (s.detect(sample))
+      if (s.detectH(sample))
       {
-        Serial.println(s.m_fastFilter);
+        setLedColor(0, 128, 128);
       }
+      else 
+      {
+        setLedColor(0, 0, 0);
+        if (tareInterval < tareTimer)
+        {
+//          LoadCell.tareNoDelay();
+          tareTimer = 0;
+          Serial.println("Taring");
+        }
+        else
+        {
+          Serial.println("Measuring");
+        }
+        
+      }
+      
+      Serial.print(s.m_fastFilter);
+      Serial.print(',');
+      Serial.println(s.m_slowFilter);
       newDataReady = 0;
+      tareTimer += serialPrintInterval;
       t = millis();
     }
   }
