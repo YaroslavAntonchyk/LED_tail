@@ -19,32 +19,30 @@
 */
 
 #include "HX711_ADC.h"
-#include "FastLED.h"
 
 //pins:
 const int HX711_dout = 6; //mcu > HX711 dout pin
 const int HX711_sck = 7; //mcu > HX711 sck pin
-const int LED_PIN = 2;
-const int LED_NUM = 60;
+const int ledR = 9;
+const int ledG = 11;
+const int ledB = 10;
 
 constexpr float slowCoef = 0.02;
 constexpr float fastCoef = 0.3;
 constexpr float inCoef = 1.5;
 constexpr float outCoef = 1;
 
+
+String inputString = "";         // a String to hold incoming data
+volatile bool stringComplete = false;  // whether the string is complete
+
 //HX711 constructor:
 HX711_ADC LoadCell(HX711_dout, HX711_sck);
 
-CRGB leds[LED_NUM];
-
-
-
-void setup() {
+void setup() 
+{
   Serial.begin(115200); delay(10);
   Serial.println("Starting...");
-
-  FastLED.addLeds<WS2852, LED_PIN, GRB>(leds, LED_NUM);
-  FastLED.setBrightness(100);
 
   LoadCell.begin();
 //  LoadCell.setReverseOutput();
@@ -60,6 +58,10 @@ void setup() {
     while (!LoadCell.update());
     Serial.println("Startup is complete");
   }
+
+  pinMode(ledR, OUTPUT);
+  pinMode(ledG, OUTPUT);
+  pinMode(ledB, OUTPUT);
 }
 
 void calibrateLoadCells()
@@ -74,7 +76,7 @@ void calibrateLoadCells()
   // check if last tare operation is complete:
   if (LoadCell.getTareStatus() == true) 
   {
-    Serial.println("Tare complete");
+//    Serial.println("Tare complete");
   }
 }
 
@@ -135,60 +137,87 @@ public:
   bool m_detected;
 };
 
-void setLedColor(int r, int g, int b)
+void setLedColorRGB(int r, int g, int b)
 {
-  for(int k = 0; k < LED_NUM; k++)
-    leds[k] = CRGB(r, g, b); 
-  FastLED.show();
+  r = constrain(r, 0, 255);
+  g = constrain(g, 0, 255);
+  b = constrain(b, 0, 255);
+  analogWrite(ledR, r);
+  analogWrite(ledG, g);
+  analogWrite(ledB, b);
 }
 
 void loop() 
 {
   static boolean newDataReady = 0;
   const int serialPrintInterval = 5; //increase value to slow down serial print activity
-  const int tareInterval = 200;
-  static int tareTimer = 0;
   static unsigned long t = 0;
 //  static Sensor s(inCoef, outCoef, slowCoef, fastCoef);
   static Sensor s(7, 10, slowCoef, fastCoef);
-
+  static int ledR = 0;
+  if (stringComplete)
+  {
+    ledR = extractValue(inputString);
+    stringComplete = false;
+  }
   // check for new data/start next conversion:
   if (LoadCell.update()) newDataReady = true;
 
   if (newDataReady) 
   {
-    if (millis() > t + serialPrintInterval) 
-    {
       float sample = abs(LoadCell.getData());
 
       if (s.detectH(sample))
       {
-        setLedColor(0, 128, 128);
+        setLedColorRGB(ledR, 128, 128);
+//        Serial.println("Detected");
       }
       else 
       {
-        setLedColor(0, 0, 0);
-        if (tareInterval < tareTimer)
-        {
-//          LoadCell.tareNoDelay();
-          tareTimer = 0;
-          Serial.println("Taring");
-        }
-        else
-        {
-          Serial.println("Measuring");
-        }
-        
+        setLedColorRGB(0, 0, 0);
       }
       
-      Serial.print(s.m_fastFilter);
-      Serial.print(',');
-      Serial.println(s.m_slowFilter);
-      newDataReady = 0;
-      tareTimer += serialPrintInterval;
+//      Serial.print(s.m_fastFilter);
+//      Serial.print(',');
+//      Serial.println(s.m_slowFilter);
+      newDataReady = false;
       t = millis();
-    }
   }
 
-  calibrateLoadCells();
+//  calibrateLoadCells();
+}
+
+
+/*
+  SerialEvent occurs whenever a new data comes in the hardware serial RX. This
+  routine is run between each time loop() runs, so using delay inside loop can
+  delay response. Multiple bytes of data may be available.
+*/
+void serialEvent() 
+{
+  while (Serial.available()) 
+  {
+    // get the new byte:
+    char inChar = (char)Serial.read();
+    // add it to the inputString:
+    inputString += inChar;
+    // if the incoming character is a newline, set a flag so the main loop can
+    // do something about it:
+    if (inChar == '\n') 
+    {
+      stringComplete = true;
+    }
+  }
+}
+
+int extractValue(String str)
+{
+  int num = 0;
+  char symbol = str.charAt(0);
+  for (int i = 1; isDigit(symbol); i++)
+  {
+    num = num*10 + (int)(symbol-48); //convert ASCII to digit
+    symbol = str.charAt(i);
+  }
+  return num;
 }
