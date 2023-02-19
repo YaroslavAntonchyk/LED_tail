@@ -2,10 +2,14 @@
 const int ledPin =  13;  // Built-in LED
 const int EnTxPin =  2;  // HIGH:Transmitter, LOW:Receiver
 const int buttonPin = 5;     // the number of the pushbutton pin
+const String msg = "1AF";
+constexpr byte DEVICE_ID = 49; // '1'
+char inputString[5];
+
 void setup() 
 { 
-  Serial.begin(9600);
-  Serial.setTimeout(100);
+  Serial.begin(115200);
+  Serial.setTimeout(5);
   pinMode(buttonPin, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
   pinMode(EnTxPin, OUTPUT);
@@ -14,46 +18,29 @@ void setup()
 } 
  
 void loop() 
-{   
-  static byte angle = 0;
-  if(isRisingEdge(buttonPin))
+{ 
+  static unsigned long t = 0;
+  digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
+  Serial.write(msg[0]);
+  Serial.write(msg[1]);
+  Serial.write(msg[2]);
+
+  Serial.flush();
+
+  digitalWrite(EnTxPin, LOW); //RS485 as receiver
+
+  char inputString[5];  
+  size_t msgLength = Serial.readBytesUntil('F', inputString, 5);
+  // for (size_t i = 0; i < msgLength; ++i)
+  //   Serial.print(inputString[i]);
+  if ((msgLength != 0) && (inputString[1] == '1'))
   {
-    angle += 20;
-    //transmitter data packet
-    Serial.print("I"); //initiate data packet
-    Serial.print("S"); //code for servo
-    Serial.print(angle); //servo angle data
-    Serial.print("F"); //finish data packet
+    Serial.print(inputString[2]);
+    Serial.println(micros() - t);
+    t = micros();    
+  }
 
-    //receiver data packet
-    Serial.print("I"); //initiate data packet
-    Serial.print("L"); //code for sensor
-    Serial.print("F"); //finish data packet
-    Serial.flush();    
-    
-    digitalWrite(EnTxPin, LOW); //RS485 as receiver
-  
-    if(Serial.find("i"))
-    {
-        int data=Serial.parseInt(); 
-        if(Serial.read()=='f') //finish reading
-         {
-           onLED(data);
-           Serial.print("Received ");
-           Serial.println(data);     
-        }
-    }
-    digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
- }
 } 
-
-void onLED(int data)
-{
-  if(data > 130)
-     digitalWrite(ledPin, HIGH); 
-  else
-     digitalWrite(ledPin, LOW); 
-}
 
 bool isButtonPressed(int buttonPin) 
 {
@@ -82,4 +69,22 @@ bool isRisingEdge(int buttonPin)
   }
   prevState = currState;
   return false;
+}
+
+struct Message
+{
+  byte id;
+  byte color;
+  byte reserved;
+};
+
+void parseMsg(char* str)
+{
+  Message* msg = reinterpret_cast<Message*>(str);
+  if (DEVICE_ID == msg->id)
+  {
+    Serial.write((char)msg->id);
+    Serial.write((char)msg->color);
+    Serial.write((char)msg->reserved);
+  }
 }
