@@ -1,18 +1,38 @@
+#include <SoftwareSerial.h>
 
 const int ledPin =  13;  // Built-in LED
 const int EnTxPin =  2;  // HIGH:Transmitter, LOW:Receiver
-const int buttonPin = 5;     // the number of the pushbutton pin
-const String msg = "1AF";
-constexpr byte DEVICE_ID = 49; // '1'
-char inputString[5];
+
+const char DEVICE_ID = '1';
+
+SoftwareSerial mySerial(A1, A0); // RX, TX
+
+struct Message
+{
+  Message(char _id, char _state, char _color, byte _crc = 255):
+    id(_id),
+    state(_state),
+    color(_color),
+    crc(_crc)
+  {
+
+  }
+  char id;
+  char state;
+  char color;
+  byte crc;
+};
 
 void setup() 
 { 
   Serial.begin(115200);
+  mySerial.begin(115200);
   Serial.setTimeout(5);
-  pinMode(buttonPin, INPUT_PULLUP);
+  mySerial.setTimeout(5);
+
   pinMode(ledPin, OUTPUT);
   pinMode(EnTxPin, OUTPUT);
+
   digitalWrite(ledPin, LOW); 
   digitalWrite(EnTxPin, HIGH); 
 } 
@@ -20,71 +40,41 @@ void setup()
 void loop() 
 { 
   static unsigned long t = 0;
-  digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
-  Serial.write(msg[0]);
-  Serial.write(msg[1]);
-  Serial.write(msg[2]);
 
-  Serial.flush();
+  digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
+  Message txMsg('1', 'n', 'a');
+  txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
+  mySerial.write((byte*)&txMsg, sizeof(txMsg));
+  mySerial.flush();
 
   digitalWrite(EnTxPin, LOW); //RS485 as receiver
 
-  char inputString[5];  
-  size_t msgLength = Serial.readBytesUntil('F', inputString, 5);
+  Message rxMsg('0', '0', '0', '0');
+  size_t msgLength = mySerial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
+  byte crc = crc8_bytes((byte*)&rxMsg, sizeof(rxMsg));
   // for (size_t i = 0; i < msgLength; ++i)
   //   Serial.print(inputString[i]);
-  if ((msgLength != 0) && (inputString[1] == '1'))
+  if ((msgLength != 0) && (crc == 0))// && (rxMsg.id == DEVICE_ID))
   {
-    Serial.print(inputString[2]);
+    Serial.print(rxMsg.id);
+    Serial.print(rxMsg.state);
+    Serial.print(rxMsg.color);
     Serial.println(micros() - t);
     t = micros();    
   }
-
 } 
 
-bool isButtonPressed(int buttonPin) 
+byte crc8_bytes(byte *buffer, byte size) 
 {
-  bool buttonState = digitalRead(buttonPin);
-  
-  if (false == buttonState)
+  byte crc = 0;
+  for (byte i = 0; i < size; i++) 
   {
-    delay(1);
-    if (false == buttonState)
+    byte data = buffer[i];
+    for (int j = 8; j > 0; j--) 
     {
-      return true;
+      crc = ((crc ^ data) & 1) ? (crc >> 1) ^ 0x8C : (crc >> 1);
+      data >>= 1;
     }
   }
-  return false;
-}
-
-bool isRisingEdge(int buttonPin)
-{
-  bool currState = isButtonPressed(buttonPin);
-  static bool prevState = false;
-  
-  if ((prevState == false) && (currState == true))
-  {
-    prevState = currState;
-    return true;
-  }
-  prevState = currState;
-  return false;
-}
-
-struct Message
-{
-  byte id;
-  byte color;
-  byte reserved;
-};
-
-void parseMsg(char* str)
-{
-  Message* msg = reinterpret_cast<Message*>(str);
-  if (DEVICE_ID == msg->id)
-  {
-    Serial.write((char)msg->id);
-    Serial.write((char)msg->color);
-    Serial.write((char)msg->reserved);
-  }
+  return crc;
 }

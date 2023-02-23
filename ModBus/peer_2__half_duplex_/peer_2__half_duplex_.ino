@@ -1,37 +1,56 @@
 const int EnTxPin = 2;
 const int buttonPin = 5;     // the number of the pushbutton pin
-const int led1 = 9;
-constexpr byte DEVICE_ID = 49; // '1'
+const int ledPin = 13;
 
-bool stringComplete = false;
+const char DEVICE_ID = '1';
+
+struct Message
+{
+  Message(char _id, char _state, char _color, byte _crc = 255):
+    id(_id),
+    state(_state),
+    color(_color),
+    crc(_crc)
+  {
+
+  }
+  char id;
+  char state;
+  char color;
+  byte crc;
+};
+
 void setup ()
 {
   Serial.begin (115200);
   Serial.setTimeout(5);
+
   pinMode(EnTxPin, OUTPUT );
-  pinMode(led1, OUTPUT);
+  pinMode(ledPin, OUTPUT);
   pinMode(buttonPin, INPUT_PULLUP);
+
   digitalWrite (EnTxPin, LOW);
-  digitalWrite (led1, LOW);
+  digitalWrite (ledPin, LOW);
   // Serial.println("ready");
 }
 
 void loop ()
 {
   bool state = isButtonPressed(buttonPin);
-  char inputString[5];
-  size_t msgLength = Serial.readBytesUntil('F', inputString, 5);
+
+  Message rxMsg('0', '0', '0');
+  size_t msgLength = Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
   // for (size_t i = 0; i < msgLength; ++i)
   //   Serial.print(inputString[i]);
-  // Serial.println();
-  if ((msgLength != 0) && (inputString[0] == '1'))
+  byte crc = crc8_bytes((byte*)&rxMsg, sizeof(rxMsg));
+  if ((msgLength != 0) && (crc == 0))// && (rxMsg.id == DEVICE_ID))
   {
     digitalWrite (EnTxPin, HIGH);
-    Serial.write('\n');
-    Serial.write('1');
-    Serial.write((state ? 'y' : 'n'));
-    Serial.write('F');
+    Message txMsg(DEVICE_ID, (state ? 'y' : 'n'), rxMsg.color);
+    txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
+    Serial.write((byte*)&txMsg, sizeof(txMsg));
     Serial.flush();
+
     digitalWrite (EnTxPin, LOW);
   }
 }
@@ -65,50 +84,17 @@ bool isRisingEdge(int buttonPin)
   return false;
 }
 
-struct Message
+byte crc8_bytes(byte *buffer, byte size) 
 {
-  byte id;
-  byte color;
-  byte reserved;
-};
-
-// void parseMsg(char* str)
-// {
-//   Message* msg = reinterpret_cast<Message*>(str);
-//   if (DEVICE_ID == msg->id)
-//   {
-//     analogWrite(led1, msg->color);
-//     digitalWrite (EnTxPin, HIGH ); //enable to transmit
-// //    delay(5);
-//     Serial.write(msg->id);
-//     if (state) Serial.write('y');
-//     else Serial.write('n');
-//     Serial.write('F');
-//     Serial.flush();
-//     delay(1);
-//     digitalWrite (EnTxPin, LOW ); //enable to receive
-//   }
-// }
-
-// void serialEvent() 
-// {
-//   static int i = 0;
-//   while (Serial.available()) 
-//   {
-//     // get the new byte:
-//     byte inChar = (byte)Serial.read();
-//     Serial.print((char)inChar);
-//     // add it to the inputString:
-//     inputString[i] = inChar;
-//     i++;
-//     if (('F' == inChar)) 
-//     {
-//       parseMsg(inputString);
-//       i = 0;
-//     }
-//     else if(i > 2)
-//     {
-//       i = 0;
-//     }
-//   }
-// }
+  byte crc = 0;
+  for (byte i = 0; i < size; i++) 
+  {
+    byte data = buffer[i];
+    for (int j = 8; j > 0; j--) 
+    {
+      crc = ((crc ^ data) & 1) ? (crc >> 1) ^ 0x8C : (crc >> 1);
+      data >>= 1;
+    }
+  }
+  return crc;
+}
