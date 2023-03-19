@@ -21,20 +21,16 @@
 #include "HX711_ADC.h"
 
 //pins:
-const int HX711_dout = 6; //mcu > HX711 dout pin
-const int HX711_sck = 7; //mcu > HX711 sck pin
-const int ledR = 9;
-const int ledG = 11;
-const int ledB = 10;
+const int HX711_dout = 7; //mcu > HX711 dout pin
+const int HX711_sck = 6; //mcu > HX711 sck pin
+const int ledR = 10;
+const int ledG = 9;
+const int ledB = 11;
 
 constexpr float slowCoef = 0.02;
 constexpr float fastCoef = 0.3;
 constexpr float inCoef = 1.5;
 constexpr float outCoef = 1;
-
-
-String inputString = "";         // a String to hold incoming data
-volatile bool stringComplete = false;  // whether the string is complete
 
 //HX711 constructor:
 HX711_ADC LoadCell(HX711_dout, HX711_sck);
@@ -76,7 +72,7 @@ void calibrateLoadCells()
   // check if last tare operation is complete:
   if (LoadCell.getTareStatus() == true) 
   {
-//    Serial.println("Tare complete");
+    Serial.println("Tare complete");
   }
 }
 
@@ -154,37 +150,28 @@ void loop()
   static unsigned long t = 0;
 //  static Sensor s(inCoef, outCoef, slowCoef, fastCoef);
   static Sensor s(7, 10, slowCoef, fastCoef);
-  static int ledR = 0;
-  if (stringComplete)
-  {
-    ledR = extractValue(inputString);
-    stringComplete = false;
-  }
+  
   // check for new data/start next conversion:
   if (LoadCell.update()) newDataReady = true;
 
   if (newDataReady) 
   {
+    if (millis() > t + serialPrintInterval)
+    {
       float sample = abs(LoadCell.getData());
-
       if (s.detectH(sample))
-      {
-        setLedColorRGB(ledR, 128, 128);
-//        Serial.println("Detected");
-      }
+        setLedColorRGB(255, 255, 0);
       else 
-      {
         setLedColorRGB(0, 0, 0);
-      }
-      
-//      Serial.print(s.m_fastFilter);
-//      Serial.print(',');
-//      Serial.println(s.m_slowFilter);
+      Serial.print(s.m_fastFilter);
+      Serial.print(',');
+      Serial.println(s.m_slowFilter);
       newDataReady = false;
       t = millis();
+    }
   }
 
-//  calibrateLoadCells();
+  calibrateLoadCells();
 }
 
 
@@ -193,31 +180,31 @@ void loop()
   routine is run between each time loop() runs, so using delay inside loop can
   delay response. Multiple bytes of data may be available.
 */
-void serialEvent() 
-{
-  while (Serial.available()) 
-  {
-    // get the new byte:
-    char inChar = (char)Serial.read();
-    // add it to the inputString:
-    inputString += inChar;
-    // if the incoming character is a newline, set a flag so the main loop can
-    // do something about it:
-    if (inChar == '\n') 
-    {
-      stringComplete = true;
-    }
-  }
-}
-
-int extractValue(String str)
-{
-  int num = 0;
-  char symbol = str.charAt(0);
-  for (int i = 1; isDigit(symbol); i++)
-  {
-    num = num*10 + (int)(symbol-48); //convert ASCII to digit
-    symbol = str.charAt(i);
-  }
-  return num;
-}
+//void serialEvent() 
+//{
+//  while (Serial.available()) 
+//  {
+//    // get the new byte:
+//    char inChar = (char)Serial.read();
+//    // add it to the inputString:
+//    inputString += inChar;
+//    // if the incoming character is a newline, set a flag so the main loop can
+//    // do something about it:
+//    if (inChar == '\n') 
+//    {
+//      stringComplete = true;
+//    }
+//  }
+//}
+//
+//int extractValue(String str)
+//{
+//  int num = 0;
+//  char symbol = str.charAt(0);
+//  for (int i = 1; isDigit(symbol); i++)
+//  {
+//    num = num*10 + (int)(symbol-48); //convert ASCII to digit
+//    symbol = str.charAt(i);
+//  }
+//  return num;
+//}
