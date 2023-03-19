@@ -43,7 +43,7 @@ void loop ()
   // for (size_t i = 0; i < msgLength; ++i)
   //   Serial.print(inputString[i]);
   byte crc = crc8_bytes((byte*)&rxMsg, sizeof(rxMsg));
-  if ((msgLength != 0) && (crc == 0))// && (rxMsg.id == DEVICE_ID))
+  if ((msgLength != 0) && (crc == 0) && (rxMsg.id == DEVICE_ID))
   {
     digitalWrite (EnTxPin, HIGH);
     Message txMsg(DEVICE_ID, (state ? 'y' : 'n'), rxMsg.color);
@@ -64,9 +64,11 @@ bool isButtonPressed(int buttonPin)
   //   delay(1);
     if (false == buttonState)
     {
+      digitalWrite (ledPin, HIGH);
       return true;
     }
   // }
+  digitalWrite (ledPin, LOW);
   return false;
 }
 
