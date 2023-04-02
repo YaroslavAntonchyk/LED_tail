@@ -1,17 +1,22 @@
 #include "HX711_ADC.h"
 #include "AsyncStream.h"
 
+//pins:
 const int HX711_dout = 7; //mcu > HX711 dout pin
 const int HX711_sck = 6; //mcu > HX711 sck pin
 const int EnTxPin = 2;
 const int buttonPin = 5; // the number of the pushbutton pin
 const int ledPin = 13;
+const int ledR = 10;
+const int ledG = 9;
+const int ledB = 11;
 
-const char DEVICE_ID = '1';
+const int MAX_BRIGHTNESS = 128;
+const byte DEVICE_ID = '1'; 
 
 struct Message
 {
-  Message(char _id, char _state, char _color, byte _crc = 255):
+  Message(byte _id, char _state, char _color, byte _crc = 255):
     id(_id),
     state(_state),
     color(_color),
@@ -27,7 +32,7 @@ struct Message
   {
     
   }
-  char id;
+  byte id;
   char state;
   char color;
   byte crc;
@@ -45,11 +50,15 @@ void setup()
 
   pinMode(EnTxPin, OUTPUT );
   pinMode(ledPin, OUTPUT);
+  pinMode(ledR, OUTPUT);
+  pinMode(ledG, OUTPUT);
+  pinMode(ledB, OUTPUT);
+
   pinMode(buttonPin, INPUT_PULLUP);
 
-  digitalWrite (EnTxPin, LOW);
-  digitalWrite (ledPin, LOW);
-
+  digitalWrite(EnTxPin, LOW);
+  digitalWrite(ledPin, LOW);
+  
   LoadCell.begin();
   LoadCell.setReverseOutput();
   LoadCell.start(2000, true);
@@ -95,16 +104,17 @@ void loop()
       txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
       Serial.write((byte*)&txMsg, sizeof(txMsg));
       Serial.flush();
-
       digitalWrite (EnTxPin, LOW);
 
       if (rxMsg.color == 'g')
       {
         digitalWrite(ledPin, HIGH);
+        setLedColorRGB(0, MAX_BRIGHTNESS, 0); //green
       }
       else if(rxMsg.color == 'd')
       {
         digitalWrite(ledPin, LOW);
+        setLedColorRGB(MAX_BRIGHTNESS, 0, 0); //red 
       }
   }
   }
@@ -124,4 +134,14 @@ byte crc8_bytes(byte *buffer, byte size)
     }
   }
   return crc;
+}
+
+void setLedColorRGB(int r, int g, int b)
+{
+  r = constrain(r, 0, MAX_BRIGHTNESS);
+  g = constrain(g, 0, MAX_BRIGHTNESS);
+  b = constrain(b, 0, MAX_BRIGHTNESS);
+  analogWrite(ledR, r);
+  analogWrite(ledG, g);
+  analogWrite(ledB, b);
 }
