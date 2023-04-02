@@ -3,13 +3,13 @@
 const int ledPin =  13;  // Built-in LED
 const int EnTxPin =  2;  // HIGH:Transmitter, LOW:Receiver
 
-// const char DEVICE_ID = '1';
+const int devicesInNet = 5;
 
 SoftwareSerial swSerial(A1, A0); // RX, TX
 
 struct Message
-{
-  Message(char _id, char _state, char _color, byte _crc = 255):
+{ //add default constructor
+  Message(byte _id, char _state, char _color, byte _crc = 255):
     id(_id),
     state(_state),
     color(_color),
@@ -17,7 +17,7 @@ struct Message
   {
 
   }
-  char id;
+  byte id;
   char state;
   char color;
   byte crc;
@@ -42,46 +42,50 @@ void loop()
   static unsigned long t1 = 0;
   static unsigned long t2 = 0;
   {
-    
-    digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
-    Message txMsg('1', 'n', 'a');
-    txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
-    Serial.write((byte*)&txMsg, sizeof(txMsg));
-    Serial.flush();
-
-    digitalWrite(EnTxPin, LOW); //RS485 as receiver
-
-    Message rxMsg('0', '0', '0', '0');
-    size_t msgLength = Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
-    byte crc = crc8_bytes((byte*)&rxMsg, sizeof(rxMsg));
-    swSerial.print(rxMsg.id);
-    swSerial.print(rxMsg.state);
-    swSerial.print(rxMsg.color);
-    swSerial.println(crc == 0 ? "OK" : "F");
-    if ((msgLength != 0) && (crc == 0) && (rxMsg.id == txMsg.id))
+    for(byte id = 1; id <= devicesInNet; ++id)
     {
-      swSerial.print(rxMsg.id);
-      swSerial.print(rxMsg.state);
-      swSerial.print(rxMsg.color);
-
-      if(rxMsg.state == 'y')
-        txMsg.color = 'g';
-      else if (rxMsg.state == 'n')
-      {
-        txMsg.color = 'd';
-      }
-
       digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
-
+      Message txMsg(id, 'n', 'a');
       txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
       Serial.write((byte*)&txMsg, sizeof(txMsg));
       Serial.flush();
 
       digitalWrite(EnTxPin, LOW); //RS485 as receiver
 
+      Message rxMsg(0, '0', '0', 0);
       size_t msgLength = Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
-      swSerial.println(micros() - t1);
-      t1 = micros(); 
+      byte crc = crc8_bytes((byte*)&rxMsg, sizeof(rxMsg));
+      swSerial.print(static_cast<int>(rxMsg.id));
+      swSerial.print(rxMsg.state);
+      swSerial.print(rxMsg.color);
+      swSerial.println(crc == 0 ? "OK" : "F");
+      if ((msgLength != 0) && (crc == 0) && (rxMsg.id == txMsg.id))
+      {
+        swSerial.print(static_cast<int>(rxMsg.id));
+        swSerial.print(rxMsg.state);
+        swSerial.print(rxMsg.color);
+
+        if(rxMsg.state == 'y')
+        {
+          txMsg.color = 'g';
+        }
+        else if (rxMsg.state == 'n')
+        {
+          txMsg.color = 'd';
+        }
+
+        digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
+
+        txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
+        Serial.write((byte*)&txMsg, sizeof(txMsg));
+        Serial.flush();
+
+        digitalWrite(EnTxPin, LOW); //RS485 as receiver
+
+        size_t msgLength = Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
+        swSerial.println(micros() - t1);
+        t1 = micros(); 
+      }
     }
   }
 
