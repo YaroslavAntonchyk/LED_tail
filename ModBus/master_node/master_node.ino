@@ -3,7 +3,7 @@
 const int ledPin =  13;  // Built-in LED
 const int EnTxPin =  2;  // HIGH:Transmitter, LOW:Receiver
 
-const int devicesInNet = 5;
+const int devicesInNet = 1;
 
 SoftwareSerial swSerial(A1, A0); // RX, TX
 

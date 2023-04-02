@@ -12,7 +12,7 @@ const int ledG = 11;
 const int ledB = 9;
 
 const int MAX_BRIGHTNESS = 128;
-const byte DEVICE_ID = '1'; 
+const byte DEVICE_ID = 1; 
 
 struct Message
 {
@@ -97,6 +97,12 @@ void loop()
     // size_t msgLength = Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
 
     byte crc = crc8_bytes((byte*)&rxMsg, sizeof(rxMsg));
+    // uncomment for debbuging
+    // Serial.print(static_cast<int>(rxMsg.id));
+    // Serial.print(rxMsg.state);
+    // Serial.print(rxMsg.color);
+    // Serial.print(crc == 0 ? "OK" : "F");
+    // Serial.println(rxMsg.id == DEVICE_ID);
     if ((crc == 0) && (rxMsg.id == DEVICE_ID))
     {
       digitalWrite (EnTxPin, HIGH);
@@ -116,7 +122,7 @@ void loop()
         digitalWrite(ledPin, LOW);
         setLedColorRGB(MAX_BRIGHTNESS, 0, 0); //red 
       }
-  }
+    }
   }
   // Serial.println(micros() - t);
 }
