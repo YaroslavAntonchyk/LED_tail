@@ -8,8 +8,8 @@ const int EnTxPin = 2;
 const int buttonPin = 5; // the number of the pushbutton pin
 const int ledPin = 13;
 const int ledR = 10;
-const int ledG = 9;
-const int ledB = 11;
+const int ledG = 11;
+const int ledB = 9;
 
 const int MAX_BRIGHTNESS = 128;
 const byte DEVICE_ID = '1'; 
