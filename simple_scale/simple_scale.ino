@@ -1,11 +1,18 @@
 #include "HX711_ADC.h"
 #include "AsyncStream.h"
 
+//#define PROD 1
 //pins:
-const int HX711_dout = 7; //mcu > HX711 dout pin
-const int HX711_sck = 6; //mcu > HX711 sck pin
+#ifdef PROD 
+  const int HX711_dout = 4; //mcu > HX711 dout pin 4
+  const int HX711_sck = 5; //mcu > HX711 sck pin 5
+#else
+  const int HX711_dout = 7; //mcu > HX711 dout pin
+  const int HX711_sck = 6; //mcu > HX711 sck pin
+#endif
+  
+
 const int EnTxPin = 2;
-const int buttonPin = 5; // the number of the pushbutton pin
 const int ledPin = 13;
 const int ledR = 10;
 const int ledG = 11;
@@ -24,6 +31,7 @@ struct Message
   {
 
   }
+
   Message(char* buf):
     id(buf[0]),
     state(buf[1]),
@@ -32,6 +40,7 @@ struct Message
   {
     
   }
+
   byte id;
   char state;
   char color;
@@ -54,8 +63,6 @@ void setup()
   pinMode(ledG, OUTPUT);
   pinMode(ledB, OUTPUT);
 
-  pinMode(buttonPin, INPUT_PULLUP);
-
   digitalWrite(EnTxPin, LOW);
   digitalWrite(ledPin, LOW);
   
@@ -73,7 +80,6 @@ void setup()
     while (!LoadCell.update());
     Serial.println("Startup is complete");
   }
-
 }
 
 void loop() 
@@ -84,7 +90,7 @@ void loop()
   // t = micros();
   if (LoadCell.update())
   {
-      float raw = LoadCell.getData();
+      float raw = abs(LoadCell.getData());
       sample = sample*0.8f + raw*0.2f;
       state = sample > 10000;
       // Serial.print(raw);
@@ -110,7 +116,7 @@ void loop()
       txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
       Serial.write((byte*)&txMsg, sizeof(txMsg));
       Serial.flush();
-      digitalWrite (EnTxPin, LOW);
+      digitalWrite(EnTxPin, LOW);
 
       if (rxMsg.color == 'g')
       {

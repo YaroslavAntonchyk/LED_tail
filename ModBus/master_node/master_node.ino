@@ -58,13 +58,9 @@ void loop()
       swSerial.print(static_cast<int>(rxMsg.id));
       swSerial.print(rxMsg.state);
       swSerial.print(rxMsg.color);
-      swSerial.println(crc == 0 ? "OK" : "F");
+      swSerial.print(crc == 0 ? 'K' : 'F');
       if ((msgLength != 0) && (crc == 0) && (rxMsg.id == txMsg.id))
       {
-        swSerial.print(static_cast<int>(rxMsg.id));
-        swSerial.print(rxMsg.state);
-        swSerial.print(rxMsg.color);
-
         if(rxMsg.state == 'y')
         {
           txMsg.color = 'g';
@@ -82,7 +78,11 @@ void loop()
 
         digitalWrite(EnTxPin, LOW); //RS485 as receiver
 
-        size_t msgLength = Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
+        Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
+        swSerial.print(static_cast<int>(rxMsg.id));
+        swSerial.print(rxMsg.state);
+        swSerial.print(rxMsg.color);
+        swSerial.print(crc == 0 ? 'K' : 'F');
         swSerial.println(micros() - t1);
         t1 = micros(); 
       }
