@@ -42,7 +42,7 @@ void loop()
   static unsigned long t1 = 0;
   static unsigned long t2 = 0;
   {
-    t1 = micros();
+    
     digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
     Message txMsg('1', 'n', 'a');
     txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
@@ -54,41 +54,42 @@ void loop()
     Message rxMsg('0', '0', '0', '0');
     size_t msgLength = Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
     byte crc = crc8_bytes((byte*)&rxMsg, sizeof(rxMsg));
-    // for (size_t i = 0; i < msgLength; ++i)
-    //   swSerial.print(inputString[i]);
+    swSerial.print(rxMsg.id);
+    swSerial.print(rxMsg.state);
+    swSerial.print(rxMsg.color);
+    swSerial.print(crc == 0 ? 'K' : 'F');
+    swSerial.print("//");
     if ((msgLength != 0) && (crc == 0) && (rxMsg.id == txMsg.id))
     {
-      swSerial.print(rxMsg.id);
-      swSerial.print(rxMsg.state);
-      swSerial.print(rxMsg.color);
       swSerial.print(micros() - t1);
-      swSerial.print("--");    
+      swSerial.println("--");
+      t1 = micros(); 
     }
   }
 
-  {
-    t2 = micros();
-    digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
-    Message txMsg('2', 'n', 'a');
-    txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
-    Serial.write((byte*)&txMsg, sizeof(txMsg));
-    Serial.flush();
-
-    digitalWrite(EnTxPin, LOW); //RS485 as receiver
-
-    Message rxMsg('0', '0', '0', '0');
-    size_t msgLength = Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
-    byte crc = crc8_bytes((byte*)&rxMsg, sizeof(rxMsg));
-    // for (size_t i = 0; i < msgLength; ++i)
-    //   swSerial.print(inputString[i]);
-    if ((msgLength != 0) && (crc == 0) && (rxMsg.id == txMsg.id))
-    {
-      swSerial.print(rxMsg.id);
-      swSerial.print(rxMsg.state);
-      swSerial.print(rxMsg.color);
-      swSerial.println(micros() - t2);  
-    }
-  }
+//  {
+//    t2 = micros();
+//    digitalWrite(EnTxPin, HIGH); //RS485 as transmitter
+//    Message txMsg('2', 'n', 'a');
+//    txMsg.crc = crc8_bytes((byte*)&txMsg, sizeof(txMsg) - 1);
+//    Serial.write((byte*)&txMsg, sizeof(txMsg));
+//    Serial.flush();
+//
+//    digitalWrite(EnTxPin, LOW); //RS485 as receiver
+//
+//    Message rxMsg('0', '0', '0', '0');
+//    size_t msgLength = Serial.readBytes((byte*)&rxMsg, sizeof(rxMsg));
+//    byte crc = crc8_bytes((byte*)&rxMsg, sizeof(rxMsg));
+//    // for (size_t i = 0; i < msgLength; ++i)
+//    //   swSerial.print(inputString[i]);
+//    if ((msgLength != 0) && (crc == 0) && (rxMsg.id == txMsg.id))
+//    {
+//      swSerial.print(rxMsg.id);
+//      swSerial.print(rxMsg.state);
+//      swSerial.print(rxMsg.color);
+//      swSerial.println(micros() - t2);  
+//    }
+//  }
 } 
 
 byte crc8_bytes(byte *buffer, byte size) 
