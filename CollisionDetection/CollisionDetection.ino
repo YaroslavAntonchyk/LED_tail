@@ -1,5 +1,8 @@
 #include <SoftwareSerial.h>
 #include "AsyncStream.h"
+#include "Arduino.h"
+#include "HardwareSerial.h"
+#include "HardwareSerial_private.h"
 
 const int ledPin =  13;  // Built-in LED
 
@@ -38,15 +41,57 @@ struct Message
   byte color;
   byte crc;
 };
+
 SoftwareSerial swSerial(A1, A0); // RX, TX
-AsyncStream<20> serial(&Serial, sizeof(Message));
+
+class MySerial : public HardwareSerial
+{
+public:
+  MySerial() : HardwareSerial (&UBRR0H, &UBRR0L, &UCSR0A, &UCSR0B, &UCSR0C, &UDR0) { }
+  void _rx_complete_irq(void)
+  {
+    HardwareSerial::_rx_complete_irq();
+    swSerial.println(_rx_buffer[_rx_buffer_head-1]);
+  }
+};
+
+MySerial mySerial;
+AsyncStream<20> serial(&mySerial, sizeof(Message));
+
+#if defined(USART_RX_vect)
+  ISR(USART_RX_vect)
+#elif defined(USART0_RX_vect)
+  ISR(USART0_RX_vect)
+#elif defined(USART_RXC_vect)
+  ISR(USART_RXC_vect) // ATmega8
+#else
+  #error "Don't know what the Data Received vector is called for Serial"
+#endif
+  {
+    mySerial._rx_complete_irq();
+  }
+
+#if defined(UART0_UDRE_vect)
+ISR(UART0_UDRE_vect)
+#elif defined(UART_UDRE_vect)
+ISR(UART_UDRE_vect)
+#elif defined(USART0_UDRE_vect)
+ISR(USART0_UDRE_vect)
+#elif defined(USART_UDRE_vect)
+ISR(USART_UDRE_vect)
+#else
+  #error "Don't know what the Data Register Empty vector is called for Serial"
+#endif
+{
+  mySerial._tx_udr_empty_irq();
+}
 
 void setup() 
 {
   swSerial.begin(115200);
-  Serial.begin(115200);
+  mySerial.begin(115200);
   swSerial.setTimeout(5);
-  Serial.setTimeout(5);
+  mySerial.setTimeout(5);
 
   pinMode(ledPin, OUTPUT);
   pinMode(RecEnPin, OUTPUT);
@@ -63,14 +108,14 @@ void loop()
   byte id = 1;
   digitalWrite(DevEnPin, HIGH);
   byte buff[] = {1, 2, 3, 4};
-  Serial.write(buff, sizeof(buff) / sizeof(byte));
-  Serial.flush();
+  mySerial.write(buff, sizeof(buff) / sizeof(byte));
+  mySerial.flush();
 
-  swSerial.print(Serial.available());
+  swSerial.print(mySerial.available());
   swSerial.print('-');
-  // while (Serial.available())
+  // while (mySerial.available())
   // {
-  //   swSerial.print(static_cast<int>(Serial.read()));
+  //   swSerial.print(static_cast<int>(mySerial.read()));
   // }
   if (serial.available())
   {
