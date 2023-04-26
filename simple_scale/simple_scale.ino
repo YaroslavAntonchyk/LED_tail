@@ -1,7 +1,7 @@
 #include "HX711_ADC.h"
 #include "AsyncStream.h"
 
-//#define PROD 1
+#define PROD 1
 //pins:
 #ifdef PROD 
   const int HX711_dout = 4; //mcu > HX711 dout pin 4
