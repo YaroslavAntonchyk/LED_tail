@@ -3,7 +3,6 @@
 #include "Arduino.h"
 #include "HardwareSerial.h"
 #include "HardwareSerial_private.h"
-#include "ButtonHandler.h"
 
 const int ledPin = 13;  // Built-in LED
 const int buttonPin = 5;
@@ -18,51 +17,8 @@ const int DevEnPin = 2;
 constexpr unsigned char SOT = '{';
 constexpr unsigned char EOT = '}';
 
-const byte dstDeviceId = 0;
-const byte thisDeviceId = 2;
-const unsigned int timeOut = 100; //microseconds
-
-struct Message
-{
-  Message() = default;
-
-  Message(byte _srcId, byte _dstId, byte _state):
-    sot('{'),
-    srcId(_srcId),
-    dstId(_dstId),
-    state(_state),
-    eot('}')
-  {
-
-  }
-
-  Message(char* buf):
-    sot(buf[0]),
-    srcId(buf[1]),
-    dstId(buf[2]),
-    state(buf[3]),
-    eot(buf[4])
-  {
-    
-  }
-
-  void print(Stream* _port)
-  {
-    _port->print(static_cast<char>(sot));
-    _port->print(srcId);
-    _port->print(dstId);
-    _port->print(static_cast<char>(state));
-    _port->println(static_cast<char>(eot));
-  }
-
-  byte sot;
-  byte srcId;
-  byte dstId;
-  byte state;
-  byte eot;
-};
-
-SoftwareSerial swSerial(A1, A0); // RX, TX
+// const byte dstDeviceId = 1;
+const byte thisDeviceId = 0;
 
 class MySerial : public HardwareSerial
 {
@@ -112,6 +68,47 @@ public:
   volatile bool isBusFree;
 };
 
+struct Message
+{
+  Message() = default;
+
+  Message(byte _srcId, byte _dstId, byte _state):
+    sot('{'),
+    srcId(_srcId),
+    dstId(_dstId),
+    state(_state),
+    eot('}')
+  {
+
+  }
+
+  Message(char* buf):
+    sot(buf[0]),
+    srcId(buf[1]),
+    dstId(buf[2]),
+    state(buf[3]),
+    eot(buf[4])
+  {
+    
+  }
+
+  void print(Stream* _port)
+  {
+    _port->print(static_cast<char>(sot));
+    _port->print(srcId);
+    _port->print(dstId);
+    _port->print(static_cast<char>(state));
+    _port->println(static_cast<char>(eot));
+  }
+
+  byte sot;
+  byte srcId;
+  byte dstId;
+  byte state;
+  byte eot;
+};
+
+SoftwareSerial swSerial(A1, A0); // RX, TX
 MySerial mySerial;
 AsyncStream<20> serial(&mySerial, sizeof(Message));
 
@@ -136,8 +133,6 @@ void setup()
   pinMode(RecEnPin, OUTPUT);
   pinMode(DevEnPin, OUTPUT);
 
-  pinMode(buttonPin, INPUT_PULLUP);
-
   digitalWrite(ledPin, LOW); 
   digitalWrite(RecEnPin, LOW);
   digitalWrite(DevEnPin, LOW);
@@ -145,35 +140,28 @@ void setup()
 
 void loop() 
 {
-  char state;
-  if (isDetected(state, buttonPin))
-  {
-    Message txMsg(thisDeviceId, dstDeviceId, state);
-    long long t = micros();
-    while(!mySerial.isBusFree) //ToDo rethink
-    {
-      if ((micros() - t) > timeOut)
-      {
-        mySerial.isBusFree = true;
-      }
-    }
-    digitalWrite(DevEnPin, HIGH);
-    mySerial.write((byte*)&txMsg, sizeof(txMsg));
-    mySerial.flush();
-    digitalWrite(DevEnPin, LOW);
-  }
-
   if (serial.available())
   {
     Message rxMsg(serial.buf);
+    rxMsg.print(&swSerial);
     if (thisDeviceId == rxMsg.dstId)
     {
-      if('g' == rxMsg.state)
-        digitalWrite(ledPin, HIGH);
-      else if('r' == rxMsg.state)
-        digitalWrite(ledPin, LOW);
-
-      rxMsg.print(&swSerial);
+      byte color = 0;
+      if ('y' == rxMsg.state) color = 'g';
+      else if ('n' == rxMsg.state) color = 'r';
+      Message txMsg(thisDeviceId, rxMsg.srcId, color);
+      long long t = micros();
+      while(!mySerial.isBusFree)
+      {
+        if ((micros() - t) > 1000)
+        {
+          mySerial.isBusFree = true;
+        }
+      }
+      digitalWrite(DevEnPin, HIGH);
+      mySerial.write((byte*)&txMsg, sizeof(txMsg));
+      mySerial.flush();
+      digitalWrite(DevEnPin, LOW);
     }
   }
 }
