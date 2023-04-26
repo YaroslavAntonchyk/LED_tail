@@ -1,0 +1,6 @@
+r7 - termination
+r3 - DE pullup
+
+max485 csa +2083E - working
+max485 esa +2229 - working
+max485 csa +2125L - fucked
