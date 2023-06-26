@@ -5,6 +5,11 @@
 #include "HardwareSerial_private.h"
 #include "ButtonHandler.h"
 
+////////////////////////////////////
+const byte thisDeviceId = 1;
+////////////////////////////////////
+
+const byte dstDeviceId = 0;
 const int ledPin = 13;  // Built-in LED
 const int buttonPin = 5;
 
@@ -18,9 +23,9 @@ const int DevEnPin = 2;
 constexpr unsigned char SOT = '{';
 constexpr unsigned char EOT = '}';
 
-const byte dstDeviceId = 0;
-const byte thisDeviceId = 2;
-const unsigned int timeOut = 100; //microseconds
+const unsigned int timeOut = 500; //microseconds
+
+enum Status { success, fail };
 
 struct Message
 {
@@ -55,6 +60,17 @@ struct Message
     _port->println(static_cast<char>(eot));
   }
 
+  bool operator==(Message const& other)
+  {
+    bool isEqual = true;
+    isEqual &= (sot == other.sot);
+    isEqual &= (srcId == other.srcId);
+    isEqual &= (dstId == other.dstId);
+    isEqual &= (state == other.state);
+    isEqual &= (eot == other.eot);
+    return isEqual;
+  }
+
   byte sot;
   byte srcId;
   byte dstId;
@@ -64,10 +80,10 @@ struct Message
 
 SoftwareSerial swSerial(A1, A0); // RX, TX
 
-class MySerial : public HardwareSerial
+class RS485 : public HardwareSerial
 {
 public:
-  MySerial() : 
+  RS485() : 
     HardwareSerial (&UBRR0H, &UBRR0L, &UCSR0A, &UCSR0B, &UCSR0C, &UDR0),
     isBusFree(true)
   { 
@@ -78,59 +94,59 @@ public:
   {
     if (bit_is_clear(*_ucsra, UPE0)) 
     {
-    // No Parity error, read byte and store it in the buffer if there is
-    // room
-    unsigned char c = *_udr;
-    if (SOT == c)
-    {
-      isBusFree = false;
-    }
-    else if (EOT == c) 
-    {
-      isBusFree = true;
-    }
+      // No Parity error, read byte and store it in the buffer if there is
+      // room
+      unsigned char c = *_udr;
+      if (SOT == c)
+      {
+        isBusFree = false;
+      }
+      else if (EOT == c) 
+      {
+        isBusFree = true;
+      }
 
-    rx_buffer_index_t i = (unsigned int)(_rx_buffer_head + 1) % SERIAL_RX_BUFFER_SIZE;
+      rx_buffer_index_t i = (unsigned int)(_rx_buffer_head + 1) % SERIAL_RX_BUFFER_SIZE;
 
-    // if we should be storing the received character into the location
-    // just before the tail (meaning that the head would advance to the
-    // current location of the tail), we're about to overflow the buffer
-    // and so we don't write the character or advance the head.
-    if (i != _rx_buffer_tail) 
+      // if we should be storing the received character into the location
+      // just before the tail (meaning that the head would advance to the
+      // current location of the tail), we're about to overflow the buffer
+      // and so we don't write the character or advance the head.
+      if (i != _rx_buffer_tail) 
+      {
+        _rx_buffer[_rx_buffer_head] = c;
+        _rx_buffer_head = i;
+      }
+    } 
+    else 
     {
-      _rx_buffer[_rx_buffer_head] = c;
-      _rx_buffer_head = i;
+      // Parity error, read byte but discard it
+      *_udr;
     }
-  } 
-  else 
-  {
-    // Parity error, read byte but discard it
-    *_udr;
-  }
   }
 
   volatile bool isBusFree;
 };
 
-MySerial mySerial;
-AsyncStream<20> serial(&mySerial, sizeof(Message));
+RS485 rs485;
+AsyncStream<20> serial(&rs485, EOT);
 
 ISR(USART_RX_vect)
-  {
-    mySerial._rx_complete_irq();
-  }
+{
+  rs485._rx_complete_irq();
+}
 
 ISR(USART_UDRE_vect)
 {
-  mySerial._tx_udr_empty_irq();
+  rs485._tx_udr_empty_irq();
 }
 
 void setup() 
 {
   swSerial.begin(115200);
-  mySerial.begin(115200);
+  rs485.begin(115200);
   swSerial.setTimeout(5);
-  mySerial.setTimeout(5);
+  rs485.setTimeout(5);
 
   pinMode(ledPin, OUTPUT);
   pinMode(RecEnPin, OUTPUT);
@@ -143,24 +159,46 @@ void setup()
   digitalWrite(DevEnPin, LOW);
 }
 
+int sendMsg(Message& msg)
+{
+  Status status = success;
+  long long t = micros();
+  while(!rs485.isBusFree) //ToDo rethink
+  {
+    if ((micros() - t) > timeOut)
+    {
+      break;
+    }
+  }
+  
+  digitalWrite(DevEnPin, HIGH);
+  rs485.write((byte*)&msg, sizeof(msg));
+  rs485.flush();
+  digitalWrite(DevEnPin, LOW);
+
+  // Check if msg delivered
+  if (serial.available())
+  {
+    Message rxMsg(serial.buf);
+    status = (rxMsg == msg) ? success : fail;
+  }
+
+  return status;
+}
+
 void loop() 
 {
   char state;
   if (isDetected(state, buttonPin))
   {
     Message txMsg(thisDeviceId, dstDeviceId, state);
-    long long t = micros();
-    while(!mySerial.isBusFree) //ToDo rethink
+    for (int attempts = 5; attempts > 0; attempts--)
     {
-      if ((micros() - t) > timeOut)
+      if (success == sendMsg(txMsg))
       {
-        mySerial.isBusFree = true;
+        break;
       }
     }
-    digitalWrite(DevEnPin, HIGH);
-    mySerial.write((byte*)&txMsg, sizeof(txMsg));
-    mySerial.flush();
-    digitalWrite(DevEnPin, LOW);
   }
 
   if (serial.available())
@@ -177,3 +215,5 @@ void loop()
     }
   }
 }
+
+

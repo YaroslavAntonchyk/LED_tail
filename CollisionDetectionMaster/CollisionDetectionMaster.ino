@@ -110,7 +110,7 @@ struct Message
 
 SoftwareSerial swSerial(A1, A0); // RX, TX
 MySerial mySerial;
-AsyncStream<20> serial(&mySerial, sizeof(Message));
+AsyncStream<20> serial(&mySerial, EOT);
 
 ISR(USART_RX_vect)
   {
