@@ -15,26 +15,22 @@ csv_filename = "data1.csv"
 csv_file = open(csv_filename, "w", newline="")
 csv_writer = csv.writer(csv_file)
 
-# Read data from the serial port and write to CSV
 try:
-    while True:
+    while(True):
         # Read a line of data from the serial port
         try:
             data = ser.readline().decode().strip()
+                # Write the data to the CSV file
+            csv_writer.writerow([data])  # Modify this if the data has multiple fields
+            
+            # Flush the CSV file buffer
+            csv_file.flush()
+            
+            # Print the data to the console
+            print(data)
         except:
             pass
-        # Split the data into fields (if needed)
-        # fields = data.split(",")  # Modify this if the data has multiple fields
-        
-        # Write the data to the CSV file
-        csv_writer.writerow([data])  # Modify this if the data has multiple fields
-        
-        # Flush the CSV file buffer
-        csv_file.flush()
-        
-        # Print the data to the console
-        print(data)
-        
+
 except KeyboardInterrupt:
     # Close the CSV file and serial port on program exit
     csv_file.close()

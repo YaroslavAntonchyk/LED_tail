@@ -1,7 +1,7 @@
 import csv
 import math
 import matplotlib.pyplot as plt
-file_path = 'data1.csv'
+file_path = 'tail9.csv'
 
 class Detector:
     def __init__(self):
@@ -11,8 +11,9 @@ class Detector:
         self.filtred = [0]
 
     def detect(self, data):
-        self.x.append(float(data[1])/1000000)
-        self.ylog.append((float(data[0])))
+        if len(data) > 1 and float(data[1])/1000000 > self.x[-1] and '.' in data[0]: 
+            self.x.append(float(data[1])/1000000)
+            self.ylog.append((float(data[0])))
         # self.filtred.append(self.filtred[-1]*0.8 + self.ylog[-1]*0.2)
 
     def draw(self):
